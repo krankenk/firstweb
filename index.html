@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power Plant Performance Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .status-online { @apply bg-green-100 text-green-800; }
+        .status-maintenance { @apply bg-orange-100 text-orange-800; }
+        .status-offline { @apply bg-red-100 text-red-800; }
+        .priority-high { @apply bg-red-100 border-l-4 border-red-500; }
+        .priority-medium { @apply bg-yellow-100 border-l-4 border-yellow-500; }
+        .priority-low { @apply bg-green-100 border-l-4 border-green-500; }
+        .chart-container { height: 300px; }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Configuration Modal -->
+    <div id="configModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Dashboard Configuration</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Google Sheets ID</label>
+                        <input type="text" id="sheetsId" class="w-full border border-gray-300 rounded-md px-3 py-2" 
+                               placeholder="Enter your Google Sheets ID">
+                        <p class="text-xs text-gray-500 mt-1">Extract from your Google Sheets URL</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                        <input type="password" id="apiKey" class="w-full border border-gray-300 rounded-md px-3 py-2" 
+                               placeholder="Enter your Google Sheets API Key">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Refresh Interval (minutes)</label>
+                        <select id="refreshInterval" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                            <option value="1">1 minute</option>
+                            <option value="5" selected>5 minutes</option>
+                            <option value="10">10 minutes</option>
+                            <option value="30">30 minutes</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button onclick="closeConfig()" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
+                    <button onclick="saveConfig()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Save & Connect</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold flex items-center">
+                        <i class="fas fa-bolt mr-3"></i>
+                        Power Plant Performance Dashboard
+                    </h1>
+                    <p class="text-blue-100 mt-1">Real-time monitoring and analytics</p>
+                </div>
+                <div class="text-right">
+                    <div class="flex items-center space-x-4">
+                        <button onclick="openConfig()" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2 rounded-md text-sm">
+                            <i class="fas fa-cog mr-2"></i>Configure
+                        </button>
+                        <button onclick="refreshData()" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-2 rounded-md text-sm">
+                            <i class="fas fa-sync-alt mr-2" id="refreshIcon"></i>Refresh
+                        </button>
+                        <div id="connectionStatus" class="flex items-center">
+                            <div class="w-3 h-3 bg-gray-400 rounded-full mr-2"></div>
+                            <span class="text-sm">Disconnected</span>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <span class="text-sm text-blue-100">Last Updated:</span>
+                        <span id="lastUpdated" class="text-sm font-mono">--:--:--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Power Plant Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Sebalang #1 -->
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">Sebalang #1</h3>
+                        <div class="mt-2">
+                            <span id="sebalang1-output" class="text-3xl font-bold text-gray-900">85.2</span>
+                            <span class="text-lg text-gray-600 ml-1">MW</span>
+                        </div>
+                        <p class="text-gray-500 text-sm mt-1">Current Output</p>
+                        <span id="sebalang1-status" class="inline-block mt-3 px-3 py-1 rounded-full text-xs font-medium status-online">
+                            <i class="fas fa-power-off mr-1"></i>Online
+                        </span>
+                    </div>
+                    <div class="text-green-500">
+                        <i class="fas fa-power-off text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sebalang #2 -->
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">Sebalang #2</h3>
+                        <div class="mt-2">
+                            <span id="sebalang2-output" class="text-3xl font-bold text-gray-900">78.5</span>
+                            <span class="text-lg text-gray-600 ml-1">MW</span>
+                        </div>
+                        <p class="text-gray-500 text-sm mt-1">Current Output</p>
+                        <span id="sebalang2-status" class="inline-block mt-3 px-3 py-1 rounded-full text-xs font-medium status-online">
+                            <i class="fas fa-power-off mr-1"></i>Online
+                        </span>
+                    </div>
+                    <div class="text-blue-500">
+                        <i class="fas fa-power-off text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PLTG -->
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">PLTG</h3>
+                        <div class="mt-2">
+                            <span id="pltg-output" class="text-3xl font-bold text-gray-900">45.3</span>
+                            <span class="text-lg text-gray-600 ml-1">MW</span>
+                        </div>
+                        <p class="text-gray-500 text-sm mt-1">Current Output</p>
+                        <span id="pltg-status" class="inline-block mt-3 px-3 py-1 rounded-full text-xs font-medium status-maintenance">
+                            <i class="fas fa-wrench mr-1"></i>Maintenance
+                        </span>
+                    </div>
+                    <div class="text-orange-500">
+                        <i class="fas fa-wrench text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Production Overview Chart -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-chart-line mr-2"></i>Total Production Overview
+                </h2>
+                <div class="flex space-x-2">
+                    <button class="px-4 py-2 bg-blue-500 text-white rounded-md text-sm">Weekly</button>
+                    <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm">Monthly</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="productionChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <!-- EFOR -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">EFOR</h3>
+                        <div class="flex items-baseline">
+                            <span id="efor-value" class="text-2xl font-bold text-red-600">2.3</span>
+                            <span class="text-sm text-gray-500 ml-1">%</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">Current Week</p>
+                        <div class="flex items-center mt-2">
+                            <i class="fas fa-arrow-down text-green-500 text-xs mr-1"></i>
+                            <span id="efor-change" class="text-xs text-green-500">0.5% vs last week</span>
+                        </div>
+                    </div>
+                    <div class="bg-red-100 p-3 rounded-full">
+                        <i class="fas fa-exclamation-triangle text-red-600"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EAF -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">EAF</h3>
+                        <div class="flex items-baseline">
+                            <span id="eaf-value" class="text-2xl font-bold text-green-600">94.2</span>
+                            <span class="text-sm text-gray-500 ml-1">%</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">Current Week</p>
+                        <div class="flex items-center mt-2">
+                            <i class="fas fa-arrow-up text-green-500 text-xs mr-1"></i>
+                            <span id="eaf-change" class="text-xs text-green-500">1.2% vs last week</span>
+                        </div>
+                    </div>
+                    <div class="bg-green-100 p-3 rounded-full">
+                        <i class="fas fa-check-circle text-green-600"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NPHR -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">NPHR</h3>
+                        <div class="flex items-baseline">
+                            <span id="nphr-value" class="text-2xl font-bold text-blue-600">9,245</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">kJ/kWh</p>
+                        <div class="flex items-center mt-2">
+                            <i class="fas fa-arrow-down text-green-500 text-xs mr-1"></i>
+                            <span id="nphr-change" class="text-xs text-green-500">125 vs last week</span>
+                        </div>
+                    </div>
+                    <div class="bg-blue-100 p-3 rounded-full">
+                        <i class="fas fa-fire text-blue-600"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SFC -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">SFC</h3>
+                        <div class="flex items-baseline">
+                            <span id="sfc-value" class="text-2xl font-bold text-purple-600">0.24</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">kg/kWh</p>
+                        <div class="flex items-center mt-2">
+                            <i class="fas fa-arrow-up text-red-500 text-xs mr-1"></i>
+                            <span id="sfc-change" class="text-xs text-red-500">0.02 vs last week</span>
+                        </div>
+                    </div>
+                    <div class="bg-purple-100 p-3 rounded-full">
+                        <i class="fas fa-oil-can text-purple-600"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- NCF Year-over-Year -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-calendar-alt mr-2"></i>NCF Year-over-Year
+                </h2>
+                <div class="chart-container">
+                    <canvas id="ncfChart"></canvas>
+                </div>
+            </div>
+
+            <!-- EAF vs EFOR Comparison -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-balance-scale mr-2"></i>EAF vs EFOR Comparison
+                </h2>
+                <div class="chart-container">
+                    <canvas id="eafEforChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Current Week Problems -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-exclamation-circle mr-2"></i>Current Week Problems
+                </h2>
+                <div id="problemsList" class="space-y-4">
+                    <div class="priority-high p-4 rounded-md">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-semibold text-gray-800">Sebalang #1</h3>
+                                <p class="text-gray-600 text-sm">Boiler feed pump vibration</p>
+                            </div>
+                            <span class="bg-red-500 text-white px-2 py-1 rounded text-xs">High</span>
+                        </div>
+                    </div>
+                    <div class="priority-medium p-4 rounded-md">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-semibold text-gray-800">PLTG</h3>
+                                <p class="text-gray-600 text-sm">Scheduled maintenance</p>
+                            </div>
+                            <span class="bg-yellow-500 text-white px-2 py-1 rounded text-xs">Medium</span>
+                        </div>
+                    </div>
+                    <div class="priority-low p-4 rounded-md">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-semibold text-gray-800">Sebalang #2</h3>
+                                <p class="text-gray-600 text-sm">Normal operation</p>
+                            </div>
+                            <span class="bg-green-500 text-white px-2 py-1 rounded text-xs">Low</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Co-Firing & Green Energy -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-leaf mr-2"></i>Co-Firing & Green Energy
+                </h2>
+                <div class="space-y-6">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-gray-600">Co-firing Rate</span>
+                            <span id="cofiring-rate" class="text-lg font-semibold text-green-600">15.2%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-green-500 h-2 rounded-full" style="width: 15.2%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-green-50 p-4 rounded-lg text-center">
+                            <div id="green-mwh-last" class="text-2xl font-bold text-green-600">1,250</div>
+                            <div class="text-sm text-gray-600">Green MWh Last Week</div>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg text-center">
+                            <div id="green-mwh-current" class="text-2xl font-bold text-green-600">1,380</div>
+                            <div class="text-sm text-gray-600">Green MWh Current Week</div>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-4 border-t">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">SdoF (Current Week)</span>
+                            <span id="sdof-rate" class="text-lg font-semibold text-blue-600">1.8%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Global Configuration
+        let config = {
+            sheetsId: '',
+            apiKey: '',
+            refreshInterval: 5,
+            lastRefresh: null
+        };
+
+        let refreshTimer = null;
+        let charts = {};
+
+        // Initialize Dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConfig();
+            initializeCharts();
+            
+            if (config.sheetsId && config.apiKey) {
+                connectToSheets();
+            } else {
+                openConfig();
+            }
+        });
+
+        // Configuration Management
+        function openConfig() {
+            document.getElementById('configModal').classList.remove('hidden');
+            // Pre-fill current values
+            document.getElementById('sheetsId').value = config.sheetsId;
+            document.getElementById('apiKey').value = config.apiKey;
+            document.getElementById('refreshInterval').value = config.refreshInterval;
+        }
+
+        function closeConfig() {
+            document.getElementById('configModal').classList.add('hidden');
+        }
+
+        function saveConfig() {
+            config.sheetsId = document.getElementById('sheetsId').value.trim();
+            config.apiKey = document.getElementById('apiKey').value.trim();
+            config.refreshInterval = parseInt(document.getElementById('refreshInterval').value);
+            
+            if (!config.sheetsId || !config.apiKey) {
+                alert('Please provide both Sheets ID and API Key');
+                return;
+            }
+            
+            // Extract Sheets ID from URL if full URL is provided
+            if (config.sheetsId.includes('docs.google.com')) {
+                const match = config.sheetsId.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+                if (match) {
+                    config.sheetsId = match[1];
+                }
+            }
+            
+            localStorage.setItem('powerPlantConfig', JSON.stringify(config));
+            closeConfig();
+            connectToSheets();
+        }
+
+        function loadConfig() {
+            const saved = localStorage.getItem('powerPlantConfig');
+            if (saved) {
+                config = { ...config, ...JSON.parse(saved) };
+            }
+        }
+
+        // Google Sheets API Integration
+        async function connectToSheets() {
+            updateConnectionStatus('connecting');
+            
+            try {
+                // Test connection with basic sheet info
+                const response = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetsId}?key=${config.apiKey}`
+                );
+                
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+                
+                updateConnectionStatus('connected');
+                await loadDashboardData();
+                setupAutoRefresh();
+                
+            } catch (error) {
+                console.error('Connection failed:', error);
+                updateConnectionStatus('error');
+                alert('Failed to connect to Google Sheets. Please check your configuration.');
+            }
+        }
+
+        async function loadDashboardData() {
+            try {
+                // Load real-time data
+                await loadRealTimeData();
+                
+                // Load weekly production data
+                await loadWeeklyProduction();
+                
+                // Load problems data
+                await loadProblemsData();
+                
+                // Update charts
+                updateCharts();
+                
+                // Update timestamp
+                updateLastRefreshTime();
+                
+            } catch (error) {
+                console.error('Data loading failed:', error);
+                updateConnectionStatus('error');
+            }
+        }
+
+        async function loadRealTimeData() {
+            const range = 'RealTimeData!A2:K2'; // Assuming latest data is in row 2
+            const response = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetsId}/values/${range}?key=${config.apiKey}`
+            );
+            
+            if (!response.ok) throw new Error('Failed to load real-time data');
+            
+            const data = await response.json();
+            
+            if (data.values && data.values[0]) {
+                const row = data.values[0];
+                
+                // Update power plant outputs
+                updateElement('sebalang1-output', parseFloat(row[1]) || 85.2);
+                updateElement('sebalang2-output', parseFloat(row[3]) || 78.5);
+                updateElement('pltg-output', parseFloat(row[5]) || 45.3);
+                
+                // Update statuses
+                updateStatus('sebalang1-status', row[2] || 'Online');
+                updateStatus('sebalang2-status', row[4] || 'Online');
+                updateStatus('pltg-status', row[6] || 'Maintenance');
+                
+                // Update performance metrics
+                updateElement('efor-value', parseFloat(row[7]) || 2.3);
+                updateElement('eaf-value', parseFloat(row[8]) || 94.2);
+                updateElement('nphr-value', parseInt(row[9]) || 9245);
+                updateElement('sfc-value', parseFloat(row[10]) || 0.24);
+            }
+        }
+
+        async function loadWeeklyProduction() {
+            const range = 'WeeklyProduction!A2:D9'; // 8 weeks of data
+            const response = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetsId}/values/${range}?key=${config.apiKey}`
+            );
+            
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            
+            if (data.values) {
+                const weeks = [];
+                const sebalang1Data = [];
+                const sebalang2Data = [];
+                const pltgData = [];
+                
+                data.values.forEach(row => {
+                    weeks.push(row[0] || '');
+                    sebalang1Data.push(parseFloat(row[1]) || 0);
+                    sebalang2Data.push(parseFloat(row[2]) || 0);
+                    pltgData.push(parseFloat(row[3]) || 0);
+                });
+                
+                // Update production chart
+                if (charts.production) {
+                    charts.production.data.labels = weeks;
+                    charts.production.data.datasets[0].data = sebalang1Data;
+                    charts.production.data.datasets[1].data = sebalang2Data;
+                    charts.production.data.datasets[2].data = pltgData;
+                    charts.production.update();
+                }
+            }
+        }
+
+        async function loadProblemsData() {
+            const range = 'Problems!A2:D10'; // Up to 8 problems
+            const response = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetsId}/values/${range}?key=${config.apiKey}`
+            );
+            
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            
+            if (data.values) {
+                updateProblemsDisplay(data.values);
+            }
+        }
+
+        // UI Update Functions
+        function updateElement(id, value) {
+            const element = document.getElementById(id);
+            if (element) {
+                if (typeof value === 'number') {
+                    element.textContent = value.toLocaleString();
+                } else {
+                    element.textContent = value;
+                }
+            }
+        }
+
+        function updateStatus(id, status) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.className = element.className.replace(/status-\w+/, '');
+                
+                const icon = element.querySelector('i');
+                
+                switch (status.toLowerCase()) {
+                    case 'online':
+                        element.classList.add('status-online');
+                        icon.className = 'fas fa-power-off mr-1';
+                        element.innerHTML = '<i class="fas fa-power-off mr-1"></i>Online';
+                        break;
+                    case 'maintenance':
+                        element.classList.add('status-maintenance');
+                        icon.className = 'fas fa-wrench mr-1';
+                        element.innerHTML = '<i class="fas fa-wrench mr-1"></i>Maintenance';
+                        break;
+                    case 'offline':
+                        element.classList.add('status-offline');
+                        icon.className = 'fas fa-times mr-1';
+                        element.innerHTML = '<i class="fas fa-times mr-1"></i>Offline';
+                        break;
+                }
+            }
+        }
+
+        function updateConnectionStatus(status) {
+            const statusElement = document.getElementById('connectionStatus');
+            const dot = statusElement.querySelector('div');
+            const text = statusElement.querySelector('span');
+            
+            switch (status) {
+                case 'connected':
+                    dot.className = 'w-3 h-3 bg-green-500 rounded-full mr-2';
+                    text.textContent = 'Connected';
+                    break;
+                case 'connecting':
+                    dot.className = 'w-3 h-3 bg-yellow-500 rounded-full mr-2';
+                    text.textContent = 'Connecting...';
+                    break;
+                case 'error':
+                    dot.className = 'w-3 h-3 bg-red-500 rounded-full mr-2';
+                    text.textContent = 'Error';
+                    break;
+                default:
+                    dot.className = 'w-3 h-3 bg-gray-400 rounded-full mr-2';
+                    text.textContent = 'Disconnected';
+            }
+        }
+
+        function updateLastRefreshTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            document.getElementById('lastUpdated').textContent = timeString;
+            config.lastRefresh = now;
+        }
+
+        function updateProblemsDisplay(problems) {
+            const container = document.getElementById('problemsList');
+            container.innerHTML = '';
+            
+            problems.forEach(problem => {
+                if (problem[0]) { // If unit name exists
+                    const div = document.createElement('div');
+                    const priority = (problem[2] || 'low').toLowerCase();
+                    
+                    div.className = `priority-${priority} p-4 rounded-md`;
+                    div.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-semibold text-gray-800">${problem[0]}</h3>
+                                <p class="text-gray-600 text-sm">${problem[1] || 'No description'}</p>
+                            </div>
+                            <span class="bg-${priority === 'high' ? 'red' : priority === 'medium' ? 'yellow' : 'green'}-500 text-white px-2 py-1 rounded text-xs">${priority.charAt(0).toUpperCase() + priority.slice(1)}</span>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                }
+            });
+        }
+
+        // Chart Initialization
+        function initializeCharts() {
+            // Production Chart
+            const productionCtx = document.getElementById('productionChart').getContext('2d');
+            charts.production = new Chart(productionCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7', 'Week 8'],
+                    datasets: [{
+                        label: 'Sebalang #1',
+                        data: [500, 520, 510, 530, 520, 540, 535, 550],
+                        borderColor: '#10B981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: 'Sebalang #2',
+                        data: [480, 490, 485, 500, 495, 510, 505, 520],
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: 'PLTG',
+                        data: [280, 285, 275, 290, 285, 295, 290, 300],
+                        borderColor: '#F59E0B',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'MWh'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // NCF Chart
+            const ncfCtx = document.getElementById('ncfChart').getContext('2d');
+            charts.ncf = new Chart(ncfCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [{
+                        label: 'Last Year',
+                        data: [65, 70, 75, 72, 68, 71, 73, 75, 77, 74, 69, 67],
+                        backgroundColor: 'rgba(156, 163, 175, 0.8)'
+                    }, {
+                        label: 'Current Year',
+                        data: [68, 72, 78, 75, 71, 74, 76, 78, 80, 77, 72, 70],
+                        backgroundColor: 'rgba(139, 92, 246, 0.8)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'NCF (%)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // EAF vs EFOR Chart
+            const eafEforCtx = document.getElementById('eafEforChart').getContext('2d');
+            charts.eafEfor = new Chart(eafEforCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [{
+                        label: 'EAF (%)',
+                        data: [92, 90, 94, 91, 93, 95, 94, 96, 91, 89, 92, 94],
+                        borderColor: '#10B981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        yAxisID: 'y'
+                    }, {
+                        label: 'EFOR (%)',
+                        data: [3.2, 2.8, 2.1, 2.9, 2.3, 1.8, 2.0, 1.5, 3.1, 3.5, 2.7, 2.3],
+                        borderColor: '#EF4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            min: 85,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'EAF (%)'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            min: 0,
+                            max: 5,
+                            title: {
+                                display: true,
+                                text: 'EFOR (%)'
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateCharts() {
+            Object.values(charts).forEach(chart => {
+                if (chart) chart.update();
+            });
+        }
+
+        // Auto-refresh functionality
+        function setupAutoRefresh() {
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+            }
+            
+            const intervalMs = config.refreshInterval * 60 * 1000;
+            refreshTimer = setInterval(() => {
+                refreshData();
+            }, intervalMs);
+        }
+
+        async function refreshData() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            refreshIcon.classList.add('fa-spin');
+            
+            try {
+                await loadDashboardData();
+            } catch (error) {
+                console.error('Refresh failed:', error);
+            } finally {
+                refreshIcon.classList.remove('fa-spin');
+            }
+        }
+
+        // Sample data update for demonstration
+        function generateSampleData() {
+            // Update sample data if no Google Sheets connection
+            if (!config.sheetsId || !config.apiKey) {
+                updateElement('sebalang1-output', (Math.random() * 20 + 75).toFixed(1));
+                updateElement('sebalang2-output', (Math.random() * 20 + 65).toFixed(1));
+                updateElement('pltg-output', (Math.random() * 15 + 35).toFixed(1));
+                
+                updateElement('efor-value', (Math.random() * 2 + 1.5).toFixed(1));
+                updateElement('eaf-value', (Math.random() * 5 + 90).toFixed(1));
+                updateElement('nphr-value', Math.floor(Math.random() * 500 + 9000));
+                updateElement('sfc-value', (Math.random() * 0.1 + 0.2).toFixed(2));
+                
+                updateLastRefreshTime();
+            }
+        }
+
+        // Initialize sample data on load if no configuration
+        setTimeout(() => {
+            if (!config.sheetsId || !config.apiKey) {
+                generateSampleData();
+                setInterval(generateSampleData, 30000); // Update every 30 seconds for demo
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
