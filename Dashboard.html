@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power Plant Performance Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card-shadow { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
+        .pulse-animation { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .status-online { background: linear-gradient(45deg, #10b981, #059669); }
+        .status-maintenance { background: linear-gradient(45deg, #f59e0b, #d97706); }
+        .status-offline { background: linear-gradient(45deg, #ef4444, #dc2626); }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="gradient-bg text-white p-6 shadow-lg">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="bg-white bg-opacity-20 p-3 rounded-full">
+                        <i class="fas fa-bolt text-2xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold">Power Plant Performance Dashboard</h1>
+                        <p class="text-blue-100">Real-time monitoring and analytics</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm text-blue-100">Last Updated</p>
+                    <p id="lastUpdated" class="text-xl font-semibold">--:--:--</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto p-6 space-y-6">
+        <!-- Plant Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white rounded-xl card-shadow p-6 border-l-4 border-green-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">Sebalang #1</h3>
+                        <p class="text-3xl font-bold text-green-600 mt-2">85.2 MW</p>
+                        <p class="text-sm text-gray-500">Current Output</p>
+                    </div>
+                    <div class="status-online text-white p-3 rounded-full">
+                        <i class="fas fa-power-off text-xl"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-center">
+                    <div class="w-2 h-2 bg-green-500 rounded-full pulse-animation mr-2"></div>
+                    <span class="text-sm text-green-600 font-medium">Online</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl card-shadow p-6 border-l-4 border-blue-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">Sebalang #2</h3>
+                        <p class="text-3xl font-bold text-blue-600 mt-2">78.5 MW</p>
+                        <p class="text-sm text-gray-500">Current Output</p>
+                    </div>
+                    <div class="status-online text-white p-3 rounded-full">
+                        <i class="fas fa-power-off text-xl"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-center">
+                    <div class="w-2 h-2 bg-blue-500 rounded-full pulse-animation mr-2"></div>
+                    <span class="text-sm text-blue-600 font-medium">Online</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl card-shadow p-6 border-l-4 border-yellow-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">PLTG</h3>
+                        <p class="text-3xl font-bold text-yellow-600 mt-2">45.3 MW</p>
+                        <p class="text-sm text-gray-500">Current Output</p>
+                    </div>
+                    <div class="status-maintenance text-white p-3 rounded-full">
+                        <i class="fas fa-tools text-xl"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-center">
+                    <div class="w-2 h-2 bg-yellow-500 rounded-full pulse-animation mr-2"></div>
+                    <span class="text-sm text-yellow-600 font-medium">Maintenance</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Production Overview -->
+        <div class="bg-white rounded-xl card-shadow p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">
+                    <i class="fas fa-chart-line mr-2 text-blue-600"></i>
+                    Total Production Overview
+                </h2>
+                <div class="flex space-x-2">
+                    <button class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">Weekly</button>
+                    <button class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Monthly</button>
+                </div>
+            </div>
+            <div style="height: 400px;">
+                <canvas id="productionChart"></canvas>
+            </div>
+        </div>
+
+        <!-- KPI Metrics -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 uppercase">EFOR</h3>
+                        <p class="text-2xl font-bold text-red-600 mt-1">2.3%</p>
+                        <p class="text-sm text-gray-400">Current Week</p>
+                    </div>
+                    <div class="bg-red-100 p-3 rounded-full">
+                        <i class="fas fa-exclamation-triangle text-red-600"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex items-center">
+                        <span class="text-sm text-green-600">↓ 0.5%</span>
+                        <span class="text-sm text-gray-500 ml-2">vs last week</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 uppercase">EAF</h3>
+                        <p class="text-2xl font-bold text-green-600 mt-1">94.2%</p>
+                        <p class="text-sm text-gray-400">Current Week</p>
+                    </div>
+                    <div class="bg-green-100 p-3 rounded-full">
+                        <i class="fas fa-check-circle text-green-600"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex items-center">
+                        <span class="text-sm text-green-600">↑ 1.2%</span>
+                        <span class="text-sm text-gray-500 ml-2">vs last week</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 uppercase">NPHR</h3>
+                        <p class="text-2xl font-bold text-blue-600 mt-1">9,245</p>
+                        <p class="text-sm text-gray-400">kJ/kWh</p>
+                    </div>
+                    <div class="bg-blue-100 p-3 rounded-full">
+                        <i class="fas fa-thermometer-half text-blue-600"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex items-center">
+                        <span class="text-sm text-green-600">↓ 125</span>
+                        <span class="text-sm text-gray-500 ml-2">vs last week</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 uppercase">SFC</h3>
+                        <p class="text-2xl font-bold text-purple-600 mt-1">0.24</p>
+                        <p class="text-sm text-gray-400">kg/kWh</p>
+                    </div>
+                    <div class="bg-purple-100 p-3 rounded-full">
+                        <i class="fas fa-gas-pump text-purple-600"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex items-center">
+                        <span class="text-sm text-red-600">↑ 0.02</span>
+                        <span class="text-sm text-gray-500 ml-2">vs last week</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Year-over-Year Comparison -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-calendar-alt mr-2 text-indigo-600"></i>
+                    NCF Year-over-Year
+                </h3>
+                <div style="height: 300px;">
+                    <canvas id="ncfChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-chart-bar mr-2 text-green-600"></i>
+                    EAF vs EFOR Comparison
+                </h3>
+                <div style="height: 300px;">
+                    <canvas id="eafEforChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Problems and Co-Firing -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-exclamation-circle mr-2 text-red-600"></i>
+                    Current Week Problems
+                </h3>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between p-4 bg-red-50 rounded-lg border-l-4 border-red-500">
+                        <div>
+                            <p class="font-semibold text-red-800">Sebalang #1</p>
+                            <p class="text-sm text-red-600">Boiler feed pump vibration</p>
+                        </div>
+                        <span class="px-3 py-1 bg-red-200 text-red-800 rounded-full text-sm">High</span>
+                    </div>
+                    <div class="flex items-center justify-between p-4 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
+                        <div>
+                            <p class="font-semibold text-yellow-800">PLTG</p>
+                            <p class="text-sm text-yellow-600">Scheduled maintenance</p>
+                        </div>
+                        <span class="px-3 py-1 bg-yellow-200 text-yellow-800 rounded-full text-sm">Medium</span>
+                    </div>
+                    <div class="flex items-center justify-between p-4 bg-green-50 rounded-lg border-l-4 border-green-500">
+                        <div>
+                            <p class="font-semibold text-green-800">Sebalang #2</p>
+                            <p class="text-sm text-green-600">Normal operation</p>
+                        </div>
+                        <span class="px-3 py-1 bg-green-200 text-green-800 rounded-full text-sm">Low</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-leaf mr-2 text-green-600"></i>
+                    Co-Firing & Green Energy
+                </h3>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-700">Co-firing Rate</span>
+                        <span class="text-2xl font-bold text-green-600">15.2%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-3">
+                        <div class="bg-green-500 h-3 rounded-full" style="width: 15.2%"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mt-4">
+                        <div class="text-center p-4 bg-green-50 rounded-lg">
+                            <p class="text-2xl font-bold text-green-600">1,250</p>
+                            <p class="text-sm text-gray-500">Green MWh Last Week</p>
+                        </div>
+                        <div class="text-center p-4 bg-green-50 rounded-lg">
+                            <p class="text-2xl font-bold text-green-600">1,380</p>
+                            <p class="text-sm text-gray-500">Green MWh Current Week</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between mt-4">
+                        <span class="text-gray-700">SdoF (Current Week)</span>
+                        <span class="text-2xl font-bold text-orange-600">1.8%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize charts and data
+        document.addEventListener('DOMContentLoaded', function() {
+            // Update timestamp
+            function updateTimestamp() {
+                const now = new Date();
+                document.getElementById('lastUpdated').textContent = now.toLocaleTimeString();
+            }
+            updateTimestamp();
+            setInterval(updateTimestamp, 30000); // Update every 30 seconds
+
+            // Production Chart
+            const productionCtx = document.getElementById('productionChart').getContext('2d');
+            new Chart(productionCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7', 'Week 8'],
+                    datasets: [{
+                        label: 'Sebalang #1',
+                        data: [580, 620, 595, 640, 610, 655, 625, 670],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }, {
+                        label: 'Sebalang #2',
+                        data: [550, 580, 560, 590, 575, 600, 585, 610],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }, {
+                        label: 'PLTG',
+                        data: [320, 340, 315, 350, 330, 360, 345, 320],
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Weekly Production (MWh)'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'MWh'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // NCF Chart
+            const ncfCtx = document.getElementById('ncfChart').getContext('2d');
+            new Chart(ncfCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [{
+                        label: 'Last Year',
+                        data: [78, 82, 85, 88, 84, 86, 89, 91, 87, 85, 83, 80],
+                        backgroundColor: 'rgba(107, 114, 128, 0.6)',
+                        borderColor: '#6b7280',
+                        borderWidth: 1
+                    }, {
+                        label: 'Current Year',
+                        data: [80, 85, 88, 91, 87, 89, 92, 94, 90, 88, 86, 82],
+                        backgroundColor: 'rgba(99, 102, 241, 0.6)',
+                        borderColor: '#6366f1',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Net Capacity Factor (%)'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'NCF (%)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // EAF vs EFOR Chart
+            const eafEforCtx = document.getElementById('eafEforChart').getContext('2d');
+            new Chart(eafEforCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [{
+                        label: 'EAF (%)',
+                        data: [92, 94, 96, 95, 93, 94, 95, 97, 94, 93, 92, 91],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        yAxisID: 'y'
+                    }, {
+                        label: 'EFOR (%)',
+                        data: [3.2, 2.8, 2.1, 2.5, 3.1, 2.9, 2.3, 1.8, 2.6, 3.0, 3.4, 3.7],
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'EAF (%)'
+                            },
+                            min: 85,
+                            max: 100
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'EFOR (%)'
+                            },
+                            min: 0,
+                            max: 5,
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                        }
+                    }
+                }
+            });
+
+            // Simulate real-time data updates
+            setInterval(() => {
+                // Add small random variations to simulate real-time updates
+                const variation = () => (Math.random() - 0.5) * 2;
+                
+                // Update production values
+                const sebalang1 = document.querySelector('.border-green-500 .text-3xl');
+                const sebalang2 = document.querySelector('.border-blue-500 .text-3xl');
+                const pltg = document.querySelector('.border-yellow-500 .text-3xl');
+                
+                if (sebalang1) {
+                    const currentValue = parseFloat(sebalang1.textContent);
+                    const newValue = Math.max(0, currentValue + variation());
+                    sebalang1.textContent = newValue.toFixed(1) + ' MW';
+                }
+                
+                if (sebalang2) {
+                    const currentValue = parseFloat(sebalang2.textContent);
+                    const newValue = Math.max(0, currentValue + variation());
+                    sebalang2.textContent = newValue.toFixed(1) + ' MW';
+                }
+                
+                if (pltg) {
+                    const currentValue = parseFloat(pltg.textContent);
+                    const newValue = Math.max(0, currentValue + variation());
+                    pltg.textContent = newValue.toFixed(1) + ' MW';
+                }
+            }, 5000); // Update every 5 seconds
+        });
+    </script>
+</body>
+</html>
